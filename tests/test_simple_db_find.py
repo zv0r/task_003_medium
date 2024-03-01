@@ -2,7 +2,6 @@ from subprocess import run, PIPE
 import os
 import shutil
 import pytest
-import filecmp
 
 B_FILE_PATH = './bin/simple_db_find'
 DB_FILE_NAME = './database.txt'
