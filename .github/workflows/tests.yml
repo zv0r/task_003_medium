@@ -1,0 +1,68 @@
+name: Run Tests
+
+on:
+  push
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Check gcc options in Makefile
+      run: |
+        if [ $(grep -i "\-Wall" ./src/Makefile 2>/dev/null | wc -l) -eq 0 ] || [ $(grep -i "\-Werror" ./src/Makefile 2>/dev/null | wc -l) -eq 0 ] || [ $(grep -i "\-Wextra" ./src/Makefile 2>/dev/null | wc -l) -eq 0 ]; then
+          echo "You forgot the gcc options -Wall -Werror and -Wextra"
+          exit 1
+        fi
+      
+    - name: Install packages
+      run: |
+        sudo apt update
+        sudo apt -y install clang-format cppcheck
+
+    - name: Check with clang-format
+      run: |
+        cp clang/.clang-format ./
+        if [ $(find ./src -name "*.[ch]" -exec clang-format -n {} \; 2>&1 | wc -l) -gt 0 ]; then
+            find ./src -name "*.[ch]" -exec clang-format --Werror -n {} \;
+            exit 1
+        fi
+    
+    - name: Check with cppcheck
+      run: |
+        cppcheck --enable=all --suppress=missingIncludeSystem --error-exitcode=1 ./src/
+    
+    - name: Make mandatory Makefile targets
+      working-directory: ./src
+      run: |
+        make simple_db
+        make simple_db_find
+      
+    - name: Make optional Makefile target not_simple_db if present
+      working-directory: ./src
+      run: |
+        if [ $(grep -i "^not_simple_db:" Makefile 2>/dev/null | wc -l) -eq 1 ]; then
+            make not_simple_db
+        fi
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    
+    - name: Install dependencies
+      run: |
+        pip install -r tests/requirements.txt
+
+    - name: Run Pytest
+      run: |
+        pytest --color=yes -v --tb=short --html=pytest_report.html tests
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      with:
+        name: pytest-results
+        path: pytest_report.html
